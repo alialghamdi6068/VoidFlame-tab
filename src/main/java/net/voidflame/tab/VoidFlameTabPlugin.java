@@ -89,7 +89,7 @@ final class TabManager {
     private String render(String line,Object d,Player p){
         Object match=null;if(d!=null){Object mm=call(d,"matchManager");match=call(mm,"get",p.getUniqueId());}
         Stats s=stats(p);
-        UUID opp=match==null?null;(match==null?null:(UUID)call(match,"opponent",p.getUniqueId()));
+        UUID opp = match == null ? null : (call(match,"opponent",p.getUniqueId()) instanceof UUID u ? u : null);
         return color(line)
                 .replace("%server_online%",String.valueOf(Bukkit.getOnlinePlayers().size()))
                 .replace("%practice_in_match%",String.valueOf(longVal(call(call(d,"matchManager"),"activeMatches"),0)*2))
