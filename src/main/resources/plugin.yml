@@ -1,0 +1,20 @@
+name: VoidFlame-tab
+version: 1.0.0
+main: net.voidflame.tab.VoidFlameTabPlugin
+description: VoidFlameMC Scoreboard and TAB appearance.
+author: VoidFlame
+website: https://github.com/alialghamdi6068/VoidFlame-tab
+api-version: '26.2'
+load: POSTWORLD
+softdepend: [VoidFlame-Duels, VoidFlame-Stats, VoidFlame-Ranks]
+
+commands:
+  vftab:
+    description: Reload the VoidFlame TAB and scoreboard configuration.
+    usage: /vftab reload
+    permission: voidflame.tab.admin
+
+permissions:
+  voidflame.tab.admin:
+    description: Reload TAB and scoreboard configuration.
+    default: op
