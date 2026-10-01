@@ -20,7 +20,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public final class VoidFlameTabPlugin extends JavaPlugin implements Listener {
-    private final Map<UUID, Object> matchCache=new HashMap<>();
     private TabManager manager;
     @Override public void onEnable(){
         saveDefaultConfig();
@@ -32,7 +31,7 @@ public final class VoidFlameTabPlugin extends JavaPlugin implements Listener {
         getLogger().info("VoidFlame-tab enabled | Scoreboard + TAB");
     }
     @EventHandler public void join(PlayerJoinEvent e){Bukkit.getScheduler().runTaskLater(this,()->manager.update(e.getPlayer()),2L);}
-    @EventHandler public void quit(PlayerQuitEvent e){matchCache.remove(e.getPlayer().getUniqueId());}
+    @EventHandler public void quit(PlayerQuitEvent e){}
     @Override public boolean onCommand(CommandSender s,Command c,String l,String[] a){
         if(!s.hasPermission("voidflame.tab.admin")){s.sendMessage("§cNo permission.");return true;}
         if(a.length==0||a[0].equalsIgnoreCase("reload")){reloadConfig();manager.updateAll();s.sendMessage("§aVoidFlame TAB/Scoreboard reloaded.");return true;}
@@ -106,8 +105,16 @@ final class TabManager {
                 .replace("%queue_mode%",bool(call(d,"queueManager"),p,"isRanked",false)?"Ranked":"Unranked");
     }
     private String rankDisplay(Player p){
-        String prefix="§7[Player]";Object rp=Bukkit.getPluginManager().getPlugin("VoidFlame-Ranks");
-        try{Object service=service("net.voidflame.ranks.VoidFlameRanksPlugin$RankService");Object id=await(service,"getPlayerRank",p.getUniqueId());if(id instanceof CompletableFuture<?> f){Object rid=f.getNow(null);Object rank=call(service,"getRank",rid);if(rank!=null)prefix=color(String.valueOf(call(rank,"prefix")));}}catch(Exception ignored){}
+        String prefix="§7[Player]";
+        try{
+            Object service=service("net.voidflame.ranks.VoidFlameRanksPlugin$RankService");
+            Object id=call(service,"getPlayerRankCached",p.getUniqueId());
+            Object rank=call(service,"getRank",id);
+            if(rank!=null){
+                Object value=call(rank,"prefix");
+                if(value!=null && !String.valueOf(value).isBlank()) prefix=color(String.valueOf(value));
+            }
+        }catch(Exception ignored){}
         return prefix+" §f"+p.getName();
     }
     private String partyStatus(Object d,Player p){try{Object pm=call(d,"partyManager");return call(pm,"partyOf",p.getUniqueId())==null?"None":"In Party";}catch(Exception e){return "None";}}
