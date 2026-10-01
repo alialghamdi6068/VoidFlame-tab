@@ -4,7 +4,7 @@
 # ================================================================
 # Scoreboard + TAB are intentionally controlled by this single plugin.
 settings:
-  update-interval-ticks: 20
+  update-interval-ticks: 40
   max-line-length: 40
   scoreboard-enabled: true
   tab-enabled: true
@@ -96,6 +96,6 @@ scoreboard:
       - "&dplay.VoidFlame.net"
 
 tab:
-  header: "&5&lVOIDFLAME &8• &dPRACTICE NETWORK"
-  footer: "&7%state% &8• &7Online: &f%server_online% &8• &7Ping: &f%player_ping%ms &8• &7Party: &f%party_status% &8• &dplay.VoidFlame.net"
-  player-format: "%rank_prefix% %player_name%"
+  header: "&5&lVOIDFLAME &8• &bPRACTICE &8• &dPLAY"
+  footer: "&8» &b%state% &8• &fOnline &d%server_online% &8• &fPing &a%player_ping%ms &8• &fParty &e%party_status% &8• &5play.VoidFlame.net"
+  player-format: "%rank_prefix% &8• &f%player_name%"
