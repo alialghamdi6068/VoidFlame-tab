@@ -25,7 +25,7 @@ public final class VoidFlameTabPlugin extends JavaPlugin implements Listener {
         saveDefaultConfig();
         manager=new TabManager(this);
         getServer().getPluginManager().registerEvents(this,this);
-        long period=Math.max(1,getConfig().getLong("settings.update-interval-ticks",20));
+        long period=Math.max(1,getConfig().getLong("settings.update-interval-ticks",40));
         getServer().getScheduler().runTaskTimer(this,manager::updateAll,period,period);
         getServer().getScheduler().runTask(this,manager::updateAll);
         getLogger().info("VoidFlame-tab enabled | Scoreboard + TAB");
@@ -43,7 +43,7 @@ final class TabManager {
     private final VoidFlameTabPlugin plugin;
     private final org.bukkit.scoreboard.ScoreboardManager bukkit;
     TabManager(VoidFlameTabPlugin p){plugin=p;bukkit=Bukkit.getScoreboardManager();}
-    void updateAll(){for(Player p:Bukkit.getOnlinePlayers())update(p);}
+    void updateAll(){ for(Player p:Bukkit.getOnlinePlayers()) update(p); }
     void update(Player p){
         if(bukkit==null)return;
         Object duels=Bukkit.getPluginManager().getPlugin("VoidFlame-Duels");
@@ -75,7 +75,7 @@ final class TabManager {
     }
     private void matchFor(Object m){}
     private void updateTab(Player p,String state,Object d){
-        String header=color(plugin.getConfig().getString("tab.header","&5&lVOIDFLAME"));
+        String header=color(plugin.getConfig().getString("tab.header","&5&lVOIDFLAME &8• &bPRACTICE"));
         String footer=color(plugin.getConfig().getString("tab.footer","&7%state% &8• &7Online: &f%server_online%"))
                 .replace("%state%",state.replace('_',' ').toUpperCase(Locale.ROOT))
                 .replace("%server_online%",String.valueOf(Bukkit.getOnlinePlayers().size()))
@@ -115,7 +115,7 @@ final class TabManager {
                 if(value!=null && !String.valueOf(value).isBlank()) prefix=color(String.valueOf(value));
             }
         }catch(Exception ignored){}
-        return prefix+" §f"+p.getName();
+        return prefix+" §8• §f"+p.getName();
     }
     private String partyStatus(Object d,Player p){try{Object pm=call(d,"partyManager");return call(pm,"partyOf",p.getUniqueId())==null?"None":"In Party";}catch(Exception e){return "None";}}
     private Stats stats(Player p){
