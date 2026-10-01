@@ -1,3 +1,8 @@
+# ================================================================
+# VoidFlame TAB • Production Configuration
+# Paper 26.2 • Java 25
+# ================================================================
+# Scoreboard + TAB are intentionally controlled by this single plugin.
 settings:
   update-interval-ticks: 20
   max-line-length: 40
