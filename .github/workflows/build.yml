@@ -1,23 +1,34 @@
 name: Build VoidFlame-tab
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '9.1.0'
       - run: chmod +x gradlew 2>/dev/null || true
       - run: gradle clean build --no-daemon
-      - uses: actions/upload-artifact@v4
+      - name: Verify JAR
+        run: test -n "$(find build/libs -maxdepth 1 -type f -name '*.jar' -print -quit)"
+      - name: Publish direct JAR release
+        uses: softprops/action-gh-release@v2
         with:
-          name: VoidFlame-tab
-          path: build/libs/*.jar
+          tag_name: build-${{ github.run_number }}
+          name: VoidFlame-tab Build ${{ github.run_number }}
+          body: Automatic build from main. Download the JAR asset directly and place it in the server plugins folder.
+          files: build/libs/*.jar
+          prerelease: true
