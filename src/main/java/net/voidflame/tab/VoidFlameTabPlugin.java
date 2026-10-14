@@ -115,7 +115,9 @@ final class TabManager {
                 if(value!=null && !String.valueOf(value).isBlank()) prefix=color(String.valueOf(value));
             }
         }catch(Exception ignored){}
-        return prefix+" §8• §f"+p.getName();
+        int ping = Math.max(0, p.getPing());
+        String pingColor = ping <= 60 ? "§a" : ping <= 120 ? "§e" : "§c";
+        return prefix+" §8• §f"+p.getName()+" §8• "+pingColor+ping+"ms";
     }
     private String partyStatus(Object d,Player p){try{Object pm=call(d,"partyManager");return call(pm,"partyOf",p.getUniqueId())==null?"None":"In Party";}catch(Exception e){return "None";}}
     private Stats stats(Player p){
