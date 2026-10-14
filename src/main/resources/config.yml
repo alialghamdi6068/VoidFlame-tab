@@ -6,7 +6,7 @@
 settings:
   update-interval-ticks: 40
   max-line-length: 40
-  scoreboard-enabled: false
+  scoreboard-enabled: true
   tab-enabled: true
 
 scoreboard:
