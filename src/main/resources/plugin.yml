@@ -1,9 +1,9 @@
-name: VoidFlame-tab
+name: VoidFlame-TAB
 version: 1.0.0
 main: net.voidflame.tab.VoidFlameTabPlugin
 description: VoidFlameMC Scoreboard and TAB appearance.
 author: VoidFlame
-website: https://github.com/alialghamdi6068/VoidFlame-tab
+website: https://github.com/alialghamdi6068/VoidFlame-TAB
 api-version: '26.2'
 load: POSTWORLD
 softdepend: [VoidFlame-Duels, VoidFlame-Stats, VoidFlame-Ranks]
