@@ -74,6 +74,7 @@ public final class VoidFlameTabPlugin extends JavaPlugin implements Listener {
                 return true;
             }
             reloadConfig();
+            manager.resetBoards();
             manager.updateAll();
             manager.refreshStatsAll();
             sender.sendMessage("§aVoidFlame TAB/Scoreboard reloaded.");
@@ -101,6 +102,8 @@ final class TabManager {
     private final VoidFlameTabPlugin plugin;
     private final org.bukkit.scoreboard.ScoreboardManager scoreboardManager;
     private final Map<UUID, Stats> stats = new ConcurrentHashMap<>();
+    private final Map<UUID, Scoreboard> boards = new ConcurrentHashMap<>();
+    private final Map<UUID, List<String>> oldLines = new ConcurrentHashMap<>();
     private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
 
     TabManager(VoidFlameTabPlugin plugin) {
@@ -162,7 +165,14 @@ final class TabManager {
 
     void remove(UUID playerId) {
         stats.remove(playerId);
+        boards.remove(playerId);
+        oldLines.remove(playerId);
         loading.remove(playerId);
+    }
+
+    void resetBoards() {
+        boards.clear();
+        oldLines.clear();
     }
 
     void toggleScoreboard(Player player) {
@@ -193,12 +203,19 @@ final class TabManager {
         if (!plugin.getConfig().getBoolean("settings.scoreboard-enabled", true) || data.scoreboardHidden) {
             player.setScoreboard(scoreboardManager.getMainScoreboard());
         } else {
-            Scoreboard board = scoreboardManager.getNewScoreboard();
+            Scoreboard board = boards.computeIfAbsent(player.getUniqueId(), ignored -> scoreboardManager.getNewScoreboard());
             String title = color(plugin.getConfig().getString("scoreboard.smp.title", "&5&lVOIDFLAME SMP"));
-            Objective objective = board.registerNewObjective("vf_smp", Criteria.DUMMY,
-                    LegacyComponentSerializer.legacySection().deserialize(title));
-            objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+            Objective objective = board.getObjective("vf_smp");
+            if (objective == null) {
+                objective = board.registerNewObjective("vf_smp", Criteria.DUMMY,
+                        LegacyComponentSerializer.legacySection().deserialize(title));
+                objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+            }
+            for (String previous : oldLines.getOrDefault(player.getUniqueId(), List.of())) {
+                board.resetScores(previous);
+            }
             List<String> lines = plugin.getConfig().getStringList("scoreboard.smp.lines");
+            List<String> renderedLines = new ArrayList<>();
             Set<String> used = new HashSet<>();
             int score = lines.size();
             for (String line : lines) {
@@ -206,8 +223,11 @@ final class TabManager {
                 int max = Math.max(1, plugin.getConfig().getInt("settings.max-line-length", 40));
                 if (rendered.length() > max) rendered = rendered.substring(0, max);
                 while (!used.add(rendered)) rendered += ChatColor.RESET;
-                objective.getScore(rendered.isBlank() ? " " : rendered).setScore(score--);
+                rendered = rendered.isBlank() ? " " : rendered;
+                renderedLines.add(rendered);
+                objective.getScore(rendered).setScore(score--);
             }
+            oldLines.put(player.getUniqueId(), List.copyOf(renderedLines));
             player.setScoreboard(board);
         }
         if (plugin.getConfig().getBoolean("settings.tab-enabled", true)) updateTab(player);
