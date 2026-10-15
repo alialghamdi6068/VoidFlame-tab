@@ -1,137 +1,287 @@
 package net.voidflame.tab;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public final class VoidFlameTabPlugin extends JavaPlugin implements Listener {
     private TabManager manager;
-    @Override public void onEnable(){
+
+    @Override
+    public void onEnable() {
         saveDefaultConfig();
-        manager=new TabManager(this);
-        getServer().getPluginManager().registerEvents(this,this);
-        long period=Math.max(1,getConfig().getLong("settings.update-interval-ticks",40));
-        getServer().getScheduler().runTaskTimer(this,manager::updateAll,period,period);
-        getServer().getScheduler().runTask(this,manager::updateAll);
-        getLogger().info("VoidFlame-tab enabled | Scoreboard + TAB");
+        manager = new TabManager(this);
+        getServer().getPluginManager().registerEvents(this, this);
+        var command = getCommand("vftab");
+        if (command == null) throw new IllegalStateException("Missing /vftab command declaration.");
+        command.setExecutor(this);
+        long period = Math.max(20L, getConfig().getLong("settings.update-interval-ticks", 40L));
+        getServer().getScheduler().runTaskTimer(this, manager::updateAll, period, period);
+        getServer().getScheduler().runTaskTimer(this, manager::refreshStatsAll, 200L, 200L);
+        getServer().getScheduler().runTask(this, manager::refreshStatsAll);
+        getLogger().info("VoidFlame-TAB enabled | SMP scoreboard and staff-star tablist");
     }
-    @EventHandler public void join(PlayerJoinEvent e){Bukkit.getScheduler().runTaskLater(this,()->manager.update(e.getPlayer()),2L);}
-    @EventHandler public void quit(PlayerQuitEvent e){}
-    @Override public boolean onCommand(CommandSender s,Command c,String l,String[] a){
-        if(!s.hasPermission("voidflame.tab.admin")){s.sendMessage("§cNo permission.");return true;}
-        if(a.length==0||a[0].equalsIgnoreCase("reload")){reloadConfig();manager.updateAll();s.sendMessage("§aVoidFlame TAB/Scoreboard reloaded.");return true;}
-        s.sendMessage("§cUsage: /vftab reload");return true;
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Bukkit.getScheduler().runTaskLater(this, () -> manager.refreshStats(event.getPlayer()), 2L);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        manager.remove(event.getPlayer().getUniqueId());
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String action = args.length == 0 ? "toggle" : args[0].toLowerCase(java.util.Locale.ROOT);
+        if (action.equals("toggle")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("Players only. Use /vftab reload from console.");
+                return true;
+            }
+            manager.toggleScoreboard(player);
+            return true;
+        }
+        if (action.equals("reload")) {
+            if (!sender.hasPermission("voidflame.tab.admin")) {
+                sender.sendMessage("§cNo permission.");
+                return true;
+            }
+            reloadConfig();
+            manager.updateAll();
+            manager.refreshStatsAll();
+            sender.sendMessage("§aVoidFlame TAB/Scoreboard reloaded.");
+            return true;
+        }
+        sender.sendMessage("§cUsage: /vftab <toggle|reload>");
+        return true;
     }
 }
 
 final class TabManager {
+    private static final String STATS_QUERY = """
+        SELECT COALESCE(s.kills,0) AS kills,
+               COALESCE(s.deaths,0) AS deaths,
+               COALESCE(s.playtime_seconds,0) AS playtime_seconds,
+               COALESCE(e.balance,0) AS balance,
+               COALESCE(e.shards,0) AS shards,
+               COALESCE((SELECT preference_value FROM player_preferences
+                         WHERE uuid=? AND preference_key='scoreboard_hidden'), 'false') AS scoreboard_hidden
+        FROM player_profiles_smp s
+        LEFT JOIN economy_accounts e ON e.uuid=s.uuid
+        WHERE s.uuid=?
+        """;
+
     private final VoidFlameTabPlugin plugin;
-    private final org.bukkit.scoreboard.ScoreboardManager bukkit;
-    TabManager(VoidFlameTabPlugin p){plugin=p;bukkit=Bukkit.getScoreboardManager();}
-    void updateAll(){ for(Player p:Bukkit.getOnlinePlayers()) update(p); }
-    void update(Player p){
-        if(bukkit==null)return;
-        Object duels=Bukkit.getPluginManager().getPlugin("VoidFlame-Duels");
-        String state=state(duels,p);
-        boolean show=bool(duels,"playerSettings",p,"scoreboard",true);
-        String path="scoreboard."+state;
-        if(!plugin.getConfig().getBoolean("settings.scoreboard-enabled",true)||!plugin.getConfig().getBoolean(path+".enabled",true)||!show){
-            p.setScoreboard(bukkit.getMainScoreboard());
-        }else{
-            Scoreboard board=bukkit.getNewScoreboard();
-            Objective o=board.registerNewObjective("vf",org.bukkit.scoreboard.Criteria.DUMMY,color(plugin.getConfig().getString(path+".title","&5&lVOIDFLAME")));
-            o.setDisplaySlot(DisplaySlot.SIDEBAR);
-            List<String> lines=plugin.getConfig().getStringList(path+".lines");
-            Set<String> used=new HashSet<>();int score=lines.size();
-            for(String line:lines){String x=render(line,duels,p);int max=Math.max(1,plugin.getConfig().getInt("settings.max-line-length",40));if(x.length()>max)x=x.substring(0,max);while(!used.add(x))x+=ChatColor.RESET;o.getScore(x.isBlank()?" ":x).setScore(score--);}
-            p.setScoreboard(board);
-        }
-        if(plugin.getConfig().getBoolean("settings.tab-enabled",true)) updateTab(p,state,duels);
+    private final org.bukkit.scoreboard.ScoreboardManager scoreboardManager;
+    private final Map<UUID, Stats> stats = new ConcurrentHashMap<>();
+    private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
+
+    TabManager(VoidFlameTabPlugin plugin) {
+        this.plugin = plugin;
+        this.scoreboardManager = Bukkit.getScoreboardManager();
     }
-    private String state(Object d,Player p){
-        if(d==null)return "spawn";
-        if(bool(d,"spectatorManager",p,"isSpectating",false))return "spectator";
-        if(bool(d,"ffaManager",p,"isInFfa",false))return "ffa";
-        if(bool(d,"queueManager",p,"isQueued",false))return "queue";
-        Object match=call(d,"matchManager"); Object m=call(match,"get",p.getUniqueId());
-        if(m!=null){matchFor(m);return "duel";}
-        Object rem=call(d,"rematches");if(bool(rem,p,"hasRecent",false))return "post-match";
-        return "spawn";
+
+    void updateAll() {
+        for (Player player : Bukkit.getOnlinePlayers()) update(player);
     }
-    private void matchFor(Object m){}
-    private void updateTab(Player p,String state,Object d){
-        String header=color(plugin.getConfig().getString("tab.header","&5&lVOIDFLAME &8• &bPRACTICE"));
-        String footer=color(plugin.getConfig().getString("tab.footer","&7%state% &8• &7Online: &f%server_online%"))
-                .replace("%state%",state.replace('_',' ').toUpperCase(Locale.ROOT))
-                .replace("%server_online%",String.valueOf(Bukkit.getOnlinePlayers().size()))
-                .replace("%player_ping%",String.valueOf(p.getPing()))
-                .replace("%party_status%",partyStatus(d,p));
-        var legacy=LegacyComponentSerializer.legacySection();
-        p.sendPlayerListHeaderAndFooter(legacy.deserialize(header),legacy.deserialize(footer));
-        p.playerListName(legacy.deserialize(rankDisplay(p)));
+
+    void refreshStatsAll() {
+        for (Player player : Bukkit.getOnlinePlayers()) refreshStats(player);
     }
-    private String render(String line,Object d,Player p){
-        Object match=null;if(d!=null){Object mm=call(d,"matchManager");match=call(mm,"get",p.getUniqueId());}
-        Stats s=stats(p);
-        UUID opp = match == null ? null : (call(match,"opponent",p.getUniqueId()) instanceof UUID u ? u : null);
-        return color(line)
-                .replace("%server_online%",String.valueOf(Bukkit.getOnlinePlayers().size()))
-                .replace("%practice_in_match%",String.valueOf(longVal(call(call(d,"matchManager"),"activeMatches"),0)*2))
-                .replace("%practice_in_queue%",String.valueOf(longVal(call(call(d,"queueManager"),"totalQueued"),0)))
-                .replace("%player_ping%",String.valueOf(p.getPing()))
-                .replace("%opponent_ping%",opp==null?"-":String.valueOf(Optional.ofNullable(Bukkit.getPlayer(opp)).map(Player::getPing).orElse(-1)))
-                .replace("%match_duration%",match==null?"0:00":duration(longVal(call(match,"durationSeconds"),0)))
-                .replace("%arena_name%",match==null?"-":String.valueOf(call(call(match,"arena"),"name")))
-                .replace("%kit_name%",match==null?"-":String.valueOf(call(match,"kit")))
-                .replace("%opponent_name%",opp==null?"None":Optional.ofNullable(Bukkit.getPlayer(opp)).map(Player::getName).orElse("Opponent"))
-                .replace("%player_wins%",String.valueOf(s.wins)).replace("%player_losses%",String.valueOf(s.losses))
-                .replace("%player_streak%",String.valueOf(s.streak)).replace("%player_elo%",String.valueOf(Math.round(s.elo)))
-                .replace("%player_kills%",String.valueOf(s.kills)).replace("%player_deaths%",String.valueOf(s.deaths))
-                .replace("%queue_mode%",bool(call(d,"queueManager"),p,"isRanked",false)?"Ranked":"Unranked");
-    }
-    private String rankDisplay(Player p){
-        String prefix="§7[Player]";
-        try{
-            Object service=service("net.voidflame.ranks.VoidFlameRanksPlugin$RankService");
-            Object id=call(service,"getPlayerRankCached",p.getUniqueId());
-            Object rank=call(service,"getRank",id);
-            if(rank!=null){
-                Object value=call(rank,"prefix");
-                if(value!=null && !String.valueOf(value).isBlank()) prefix=color(String.valueOf(value));
+
+    void refreshStats(Player player) {
+        if (player == null || !player.isOnline() || !loading.add(player.getUniqueId())) return;
+        try {
+            Plugin core = Bukkit.getPluginManager().getPlugin("VoidFlame-Core");
+            if (core == null || !core.isEnabled()) {
+                loading.remove(player.getUniqueId());
+                stats.putIfAbsent(player.getUniqueId(), Stats.empty());
+                return;
             }
-        }catch(Exception ignored){}
-        int ping = Math.max(0, p.getPing());
-        String pingColor = ping <= 60 ? "§a" : ping <= 120 ? "§e" : "§c";
-        return prefix+" §8• §f"+p.getName()+" §8• "+pingColor+ping+"ms";
+            Object database = core.getClass().getMethod("database").invoke(core);
+            Method query = database.getClass().getMethod("query", String.class, Object[].class);
+            Object raw = query.invoke(database, STATS_QUERY,
+                    (Object) new Object[]{player.getUniqueId().toString(), player.getUniqueId().toString()});
+            if (!(raw instanceof CompletableFuture<?> future)) {
+                loading.remove(player.getUniqueId());
+                return;
+            }
+            future.whenComplete((result, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                loading.remove(player.getUniqueId());
+                if (!player.isOnline()) return;
+                if (error != null) {
+                    plugin.getLogger().log(Level.WARNING, "Unable to refresh SMP scoreboard data for " + player.getName(), error);
+                    stats.putIfAbsent(player.getUniqueId(), Stats.empty());
+                    update(player);
+                    return;
+                }
+                if (result instanceof List<?> rows && !rows.isEmpty() && rows.getFirst() instanceof Map<?, ?> row) {
+                    stats.put(player.getUniqueId(), new Stats(
+                            number(row.get("balance")), number(row.get("shards")),
+                            number(row.get("kills")), number(row.get("deaths")),
+                            number(row.get("playtime_seconds")),
+                            Boolean.parseBoolean(String.valueOf(row.get("scoreboard_hidden")))));
+                } else {
+                    stats.putIfAbsent(player.getUniqueId(), Stats.empty());
+                }
+                update(player);
+            }));
+        } catch (Exception error) {
+            loading.remove(player.getUniqueId());
+            plugin.getLogger().log(Level.WARNING, "Unable to access VoidFlame-Core database for SMP scoreboard.", error);
+            stats.putIfAbsent(player.getUniqueId(), Stats.empty());
+        }
     }
-    private String partyStatus(Object d,Player p){try{Object pm=call(d,"partyManager");return call(pm,"partyOf",p.getUniqueId())==null?"None":"In Party";}catch(Exception e){return "None";}}
-    private Stats stats(Player p){
-        try{Object s=service("net.voidflame.stats.StatsService");Object v=call(s,"getCached",p.getUniqueId());return new Stats(longVal(call(v,"wins"),0),longVal(call(v,"losses"),0),longVal(call(v,"kills"),0),longVal(call(v,"deaths"),0),longVal(call(v,"streak"),0),doubleVal(call(v,"elo"),1000));}catch(Exception e){return new Stats(0,0,0,0,0,1000);}
+
+    void remove(UUID playerId) {
+        stats.remove(playerId);
+        loading.remove(playerId);
     }
-    private record Stats(long wins,long losses,long kills,long deaths,long streak,double elo){}
-    private Object service(String cn)throws Exception{Class<?> c=Class.forName(cn);var r=Bukkit.getServicesManager().getRegistration(c);return r==null?null:r.getProvider();}
-    private Object await(Object o,String n,Object...a)throws Exception{return o==null?null:method(o,n,a).invoke(o,a);}
-    private Object call(Object o,String n,Object...a){try{return o==null?null:method(o,n,a).invoke(o,a);}catch(Exception e){return null;}}
-    private Method method(Object o,String n,Object...a){for(Method m:o.getClass().getMethods())if(m.getName().equals(n)&&m.getParameterCount()==a.length)return m;throw new IllegalArgumentException();}
-    private boolean bool(Object o,String field,Player p,String method,boolean def){Object x=call(call(o,field),method,p);return x instanceof Boolean b?b:def;}
-    private boolean bool(Object o,Player p,String method,boolean def){Object x=call(o,method,p);return x instanceof Boolean b?b:def;}
-    private long longVal(Object x,long d){return x instanceof Number n?n.longValue():d;}
-    private double doubleVal(Object x,double d){return x instanceof Number n?n.doubleValue():d;}
-    private String duration(long s){return s/60+":"+String.format("%02d",s%60);}
-    private String color(String s){return ChatColor.translateAlternateColorCodes('&',s==null?"":s);}
+
+    void toggleScoreboard(Player player) {
+        UUID id = player.getUniqueId();
+        Stats current = stats.getOrDefault(id, Stats.empty());
+        boolean hidden = !current.scoreboardHidden;
+        CorePreferenceWriter.write(plugin, id, hidden).whenComplete((ignored, error) ->
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (error != null) {
+                        player.sendMessage("§cCould not save your scoreboard preference. Try again.");
+                        plugin.getLogger().log(Level.WARNING, "Unable to save scoreboard preference for " + player.getName(), error);
+                        return;
+                    }
+                    Stats old = stats.getOrDefault(id, Stats.empty());
+                    stats.put(id, old.withScoreboardHidden(hidden));
+                    if (hidden && scoreboardManager != null) {
+                        player.setScoreboard(scoreboardManager.getMainScoreboard());
+                    } else {
+                        update(player);
+                    }
+                    player.sendMessage(hidden ? "§7SMP scoreboard hidden." : "§aSMP scoreboard enabled.");
+                }));
+    }
+
+    void update(Player player) {
+        if (scoreboardManager == null || !player.isOnline()) return;
+        Stats data = stats.getOrDefault(player.getUniqueId(), Stats.empty());
+        if (!plugin.getConfig().getBoolean("settings.scoreboard-enabled", true) || data.scoreboardHidden) {
+            player.setScoreboard(scoreboardManager.getMainScoreboard());
+        } else {
+            Scoreboard board = scoreboardManager.getNewScoreboard();
+            String title = color(plugin.getConfig().getString("scoreboard.smp.title", "&5&lVOIDFLAME SMP"));
+            Objective objective = board.registerNewObjective("vf_smp", Criteria.DUMMY,
+                    LegacyComponentSerializer.legacySection().deserialize(title));
+            objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+            List<String> lines = plugin.getConfig().getStringList("scoreboard.smp.lines");
+            Set<String> used = new HashSet<>();
+            int score = lines.size();
+            for (String line : lines) {
+                String rendered = render(line, player, data);
+                int max = Math.max(1, plugin.getConfig().getInt("settings.max-line-length", 40));
+                if (rendered.length() > max) rendered = rendered.substring(0, max);
+                while (!used.add(rendered)) rendered += ChatColor.RESET;
+                objective.getScore(rendered.isBlank() ? " " : rendered).setScore(score--);
+            }
+            player.setScoreboard(board);
+        }
+        if (plugin.getConfig().getBoolean("settings.tab-enabled", true)) updateTab(player);
+    }
+
+    private String render(String line, Player player, Stats data) {
+        long hours = data.playtimeSeconds / 3600L;
+        long minutes = (data.playtimeSeconds % 3600L) / 60L;
+        return color(line)
+                .replace("%server_online%", String.valueOf(Bukkit.getOnlinePlayers().size()))
+                .replace("%player_name%", player.getName())
+                .replace("%player_ping%", String.valueOf(Math.max(0, player.getPing())))
+                .replace("%balance%", format(data.balance))
+                .replace("%shards%", format(data.shards))
+                .replace("%kills%", format(data.kills))
+                .replace("%deaths%", format(data.deaths))
+                .replace("%playtime%", hours + "h " + minutes + "m");
+    }
+
+    private void updateTab(Player player) {
+        String header = color(plugin.getConfig().getString("tab.header", "&5&lVOIDFLAME SMP"));
+        String footer = color(plugin.getConfig().getString("tab.footer", "&7Online: &f%server_online% &8• &7Ping: &f%player_ping%ms"))
+                .replace("%server_online%", String.valueOf(Bukkit.getOnlinePlayers().size()))
+                .replace("%player_ping%", String.valueOf(Math.max(0, player.getPing())));
+        var legacy = LegacyComponentSerializer.legacySection();
+        player.sendPlayerListHeaderAndFooter(legacy.deserialize(header), legacy.deserialize(footer));
+        player.playerListName(legacy.deserialize(staffDisplay(player)));
+    }
+
+    private String staffDisplay(Player player) {
+        if (!player.hasPermission("voidflame.tab.staff") && !player.hasPermission("voidflame.staff") && !player.isOp()) {
+            return "§f" + player.getName();
+        }
+        String starColor = player.hasPermission("voidflame.staff.owner") ? "§d"
+                : player.hasPermission("voidflame.staff.manager") ? "§6"
+                : player.hasPermission("voidflame.staff.admin") ? "§c"
+                : player.hasPermission("voidflame.staff.moderator") ? "§9" : "§b";
+        return starColor + "★ §f" + player.getName();
+    }
+
+    private long number(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    private String format(long value) {
+        return java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(value);
+    }
+
+    private String color(String value) {
+        return ChatColor.translateAlternateColorCodes('&', value == null ? "" : value);
+    }
+
+    private record Stats(long balance, long shards, long kills, long deaths, long playtimeSeconds, boolean scoreboardHidden) {
+        static Stats empty() { return new Stats(0, 0, 0, 0, 0, false); }
+        Stats withScoreboardHidden(boolean hidden) { return new Stats(balance, shards, kills, deaths, playtimeSeconds, hidden); }
+    }
+}
+
+final class CorePreferenceWriter {
+    private CorePreferenceWriter() {}
+
+    static CompletableFuture<Void> write(JavaPlugin plugin, UUID playerId, boolean hidden) {
+        try {
+            Plugin core = Bukkit.getPluginManager().getPlugin("VoidFlame-Core");
+            if (core == null || !core.isEnabled()) throw new IllegalStateException("VoidFlame-Core unavailable");
+            Object database = core.getClass().getMethod("database").invoke(core);
+            Method execute = database.getClass().getMethod("execute", String.class, Object[].class);
+            Object raw = execute.invoke(database,
+                    "INSERT INTO player_preferences(uuid,preference_key,preference_value,updated_at) VALUES (?,'scoreboard_hidden',?,?) ON CONFLICT(uuid,preference_key) DO UPDATE SET preference_value=excluded.preference_value,updated_at=excluded.updated_at",
+                    (Object) new Object[]{playerId.toString(), Boolean.toString(hidden), System.currentTimeMillis()});
+            if (raw instanceof CompletableFuture<?> future) return future.thenApply(ignored -> null);
+            throw new IllegalStateException("Unexpected Core database result.");
+        } catch (Exception error) {
+            return CompletableFuture.failedFuture(error);
+        }
+    }
 }
