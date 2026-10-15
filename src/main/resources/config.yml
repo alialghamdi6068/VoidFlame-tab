@@ -1,8 +1,5 @@
-# ================================================================
-# VoidFlame TAB • Production Configuration
-# Paper 26.2 • Java 25
-# ================================================================
-# Scoreboard + TAB are intentionally controlled by this single plugin.
+# VoidFlame-TAB | SMP scoreboard and player list
+# Paper 26.2 / Java 25. Data is read from VoidFlame-Core's shared SQLite database.
 settings:
   update-interval-ticks: 40
   max-line-length: 40
@@ -10,92 +7,21 @@ settings:
   tab-enabled: true
 
 scoreboard:
-  spawn:
-    enabled: true
-    title: "&5&lVOIDFLAME"
+  smp:
+    title: "&5&lVOIDFLAME SMP"
     lines:
       - "&8&m--------------------"
+      - "&fBalance: &a$%balance%"
+      - "&fShards: &d%shards%"
+      - " "
+      - "&fKills: &a%kills%"
+      - "&fDeaths: &c%deaths%"
+      - "&fPlaytime: &b%playtime%"
+      - " "
       - "&fOnline: &d%server_online%"
-      - "&fIn Match: &5%practice_in_match%"
-      - "&fIn Queue: &d%practice_in_queue%"
-      - " "
-      - "&dYour Stats"
-      - "&7Wins: &f%player_wins%"
-      - "&7Losses: &f%player_losses%"
-      - "&7Winstreak: &d%player_streak%"
-      - "&7ELO: &5%player_elo%"
-      - " "
-      - "&8&m--------------------"
-      - "&dplay.VoidFlame.net"
-  duel:
-    enabled: true
-    title: "&5&lDUEL"
-    lines:
-      - "&8&m--------------------"
-      - "&fOpponent: &d%opponent_name%"
-      - "&fKit: &5%kit_name%"
-      - "&fArena: &d%arena_name%"
-      - " "
-      - "&fYour Ping: &d%player_ping%ms"
-      - "&fOpponent Ping: &d%opponent_ping%ms"
-      - "&fTime: &5%match_duration%"
-      - " "
-      - "&8&m--------------------"
-      - "&dplay.VoidFlame.net"
-  queue:
-    enabled: true
-    title: "&5&lQUEUE"
-    lines:
-      - "&8&m--------------------"
-      - "&fMode: &d%queue_mode%"
-      - "&fKit: &5%kit_name%"
-      - "&fQueued: &d%practice_in_queue%"
-      - "&fYour ELO: &5%player_elo%"
-      - " "
-      - "&7Waiting for an opponent..."
-      - "&8&m--------------------"
-      - "&dplay.VoidFlame.net"
-  ffa:
-    enabled: true
-    title: "&5&lVOIDFLAME FFA"
-    lines:
-      - "&8&m--------------------"
-      - "&fOnline: &d%server_online%"
-      - "&fKills: &d%player_kills%"
-      - "&fDeaths: &d%player_deaths%"
-      - "&fWinstreak: &d%player_streak%"
-      - "&fELO: &5%player_elo%"
-      - " "
-      - "&8&m--------------------"
-      - "&dplay.VoidFlame.net"
-  spectator:
-    enabled: true
-    title: "&5&lSPECTATOR"
-    lines:
-      - "&8&m--------------------"
-      - "&fWatching: &d%opponent_name%"
-      - "&fKit: &5%kit_name%"
-      - "&fArena: &d%arena_name%"
-      - "&fOnline: &d%server_online%"
-      - " "
-      - "&7You are spectating."
-      - "&8&m--------------------"
-      - "&dplay.VoidFlame.net"
-  post-match:
-    enabled: true
-    title: "&5&lPOST MATCH"
-    lines:
-      - "&8&m--------------------"
-      - "&fWins: &a%player_wins%"
-      - "&fLosses: &c%player_losses%"
-      - "&fWinstreak: &d%player_streak%"
-      - "&fELO: &5%player_elo%"
-      - " "
-      - "&eRematch available"
       - "&8&m--------------------"
       - "&dplay.VoidFlame.net"
 
 tab:
-  header: "&5&lVOIDFLAME &8• &bPRACTICE &8• &dPLAY"
-  footer: "&8» &b%state% &8• &fOnline &d%server_online% &8• &fPing &a%player_ping%ms &8• &fParty &e%party_status% &8• &5play.VoidFlame.net"
-  player-format: "%rank_prefix% &8• &f%player_name%"
+  header: "&5&lVOIDFLAME MC &8• &dSMP"
+  footer: "&8» &fOnline &d%server_online% &8• &fPing &a%player_ping%ms &8• &dplay.VoidFlame.net"
