@@ -1,36 +1,20 @@
 name: VoidFlame-TAB
-version: 2.0.0
+version: 1.0.0
 main: net.voidflame.tab.VoidFlameTabPlugin
-description: SMP stats scoreboard and staff-star player list for VoidFlameMC.
+description: VoidFlameMC Scoreboard and TAB appearance.
 author: VoidFlame
-website: https://github.com/alialghamdi6068/VoidFlame-tab
+website: https://github.com/alialghamdi6068/VoidFlame-TAB
 api-version: '26.2'
-depend: [VoidFlame-Core]
-softdepend: [LuckPerms]
+load: POSTWORLD
+softdepend: [VoidFlame-Duels, VoidFlame-Stats, VoidFlame-Ranks]
 
 commands:
   vftab:
-    description: Toggle the SMP scoreboard or reload TAB settings.
-    usage: /vftab <toggle|reload>
+    description: Reload the VoidFlame TAB and scoreboard configuration.
+    usage: /vftab reload
+    permission: voidflame.tab.admin
+
 permissions:
   voidflame.tab.admin:
-    description: Reload the VoidFlame TAB and scoreboard configuration.
-    default: op
-  voidflame.tab.staff:
-    description: Show the colored staff star in the player list.
-    default: op
-  voidflame.staff:
-    description: General staff marker permission.
-    default: op
-  voidflame.staff.owner:
-    description: Owner star color.
-    default: op
-  voidflame.staff.manager:
-    description: Manager star color.
-    default: op
-  voidflame.staff.admin:
-    description: Admin star color.
-    default: op
-  voidflame.staff.moderator:
-    description: Moderator star color.
+    description: Reload TAB and scoreboard configuration.
     default: op
